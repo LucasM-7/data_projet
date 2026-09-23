@@ -61,6 +61,10 @@ L'application Streamlit permet de simuler le profil d'un prestataire (nombre de 
 - la décision d'audit selon les deux logiques de seuil (statistique vs. coût-sensible),
 - les métriques de performance du modèle sur le test set.
 
+Données
+
+Dataset source : Healthcare Provider Fraud Detection (Kaggle). Les fichiers de données ne sont pas inclus dans ce repo — à télécharger séparément sur Kaggle pour ré-exécuter les scripts analysis/.
+
 ## Structure du repo
 
 ```
