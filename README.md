@@ -10,7 +10,7 @@ Projet construit sur le dataset Kaggle *Healthcare Provider Fraud Detection* (cl
 
 ## Contexte et objectif
 
-Un assureur santé ne peut pas auditer tous ses prestataires — auditer coûte cher, et laisser passer une fraude coûte plus cher encore. L'objectif de ce projet est double :
+Un assureur santé ne peut pas auditer tous ses prestataires, auditer coûte cher, et laisser passer une fraude coûte plus cher encore. L'objectif de ce projet est double :
 
 1. **Détecter** les prestataires au comportement de facturation atypique, à partir de leur activité agrégée (volume de claims, montants remboursés, part hospitalisation/ambulatoire, franchise).
 2. **Décider** quand déclencher un audit, en tenant compte du coût réel d'un audit inutile face au coût d'une fraude non détectée, pas seulement de la performance statistique brute du modèle.
