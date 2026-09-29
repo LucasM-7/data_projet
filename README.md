@@ -1,4 +1,4 @@
-# Détection de fraude santé — Healthcare Provider Fraud Detection
+# Détection de fraude santé : Healthcare Provider Fraud Detection
 
 **Pipeline complet SQL → R → Python, du nettoyage de données brutes jusqu'à un modèle déployé en production.**
 
@@ -13,20 +13,20 @@ Projet construit sur le dataset Kaggle *Healthcare Provider Fraud Detection* (cl
 Un assureur santé ne peut pas auditer tous ses prestataires — auditer coûte cher, et laisser passer une fraude coûte plus cher encore. L'objectif de ce projet est double :
 
 1. **Détecter** les prestataires au comportement de facturation atypique, à partir de leur activité agrégée (volume de claims, montants remboursés, part hospitalisation/ambulatoire, franchise).
-2. **Décider** quand déclencher un audit, en tenant compte du coût réel d'un audit inutile face au coût d'une fraude non détectée — pas seulement de la performance statistique brute du modèle.
+2. **Décider** quand déclencher un audit, en tenant compte du coût réel d'un audit inutile face au coût d'une fraude non détectée, pas seulement de la performance statistique brute du modèle.
 
 ## Stack et rôle de chaque outil
 
 | Étape | Outil | Rôle |
 |---|---|---|
-| Exploration & jointures | **SQL** (DBeaver + SQLite) | Jointure des 3 tables sources (`Train`, `Train_Inpatientdata`, `Train_Outpatientdata`) et agrégation au niveau prestataire — construction des 9 variables explicatives finales |
+| Exploration & jointures | **SQL** (DBeaver + SQLite) | Jointure des 3 tables sources (`Train`, `Train_Inpatientdata`, `Train_Outpatientdata`) et agrégation au niveau prestataire : construction des 9 variables explicatives finales |
 | Modélisation statistique | **R** (glmnet, caret, pROC, PRROC) | EDA, baseline GLM, LASSO avec validation croisée, diagnostic de multicolinéarité, calibration du seuil de décision |
 | Modélisation ML & déploiement | **Python** (scikit-learn, XGBoost, SHAP, Streamlit) | Modèle de comparaison (XGBoost + SHAP), ré-implémentation du LASSO retenu, dashboard interactif |
 
 ## Méthodologie
 
 - **Split stratifié 80/20** effectué *avant* tout preprocessing, pour éviter toute fuite de données (data leakage).
-- **Seuil de décision calibré sur des prédictions Out-Of-Fold (OOF)** du train uniquement — jamais sur le test, qui reste sanctuarisé pour l'évaluation finale.
+- **Seuil de décision calibré sur des prédictions Out-Of-Fold (OOF)** du train uniquement, jamais sur le test, qui reste sanctuarisé pour l'évaluation finale.
 - **Deux seuils comparés** dans le dashboard final :
   - un seuil **statistique** (indice de Youden), qui traite faux positifs et faux négatifs à égalité ;
   - un seuil **coût-sensible métier**, calibré pour minimiser un coût estimé (300€ par audit inutile vs. montant remboursé en cas de fraude manquée).
@@ -38,11 +38,11 @@ Un assureur santé ne peut pas auditer tous ses prestataires — auditer coûte 
 |---|---|---|---|
 | GLM baseline (2 variables, R) | 0.912 | — | `log_outpatient`, `nb_hospit` |
 | LASSO (R, glmnet) | 0.929 | 0.674 | `total_reimbursed`, `total_claims`, `total_deductible` |
-| **LASSO (Python, scikit-learn — modèle déployé)** | **0.930** | **0.705** | 3 (coefficients à confirmer) |
+| **LASSO (Python, scikit-learn — modèle déployé)** | **0.930** | **0.705** | 3 |
 | Elastic Net (R, glmnet) | 0.928 | 0.677 | `total_claims`, `nb_hospit`, `nb_outpatient`, `total_reimbursed`, `max_reimbursed_inp`, `total_deductible` |
 | XGBoost (Python, comparaison) | 0.920 | 0.693 | 9 (top 3 en importance SHAP : `total_reimbursed`, `total_deductible`, `max_reimbursed_out`) |
 
-**Modèle final retenu : LASSO.** Performance équivalente (voire légèrement supérieure) à XGBoost, pour une explicabilité native et exacte via les coefficients — un critère important en assurance santé, où la décision d'auditer un prestataire doit pouvoir se justifier. Le fait que le LASSO batte un modèle non-linéaire suggère aussi que la relation entre ces variables et la fraude est essentiellement linéaire sur ce dataset.
+**Modèle final retenu : LASSO.** Performance équivalente (voire légèrement supérieure) à XGBoost, pour une explicabilité native et exacte via les coefficients, un critère important en assurance santé, où la décision d'auditer un prestataire doit pouvoir se justifier. Le fait que le LASSO batte un modèle non-linéaire suggère aussi que la relation entre ces variables et la fraude est essentiellement linéaire sur ce dataset.
 
 Le LASSO a été implémenté deux fois (R avec `glmnet`, Python avec `scikit-learn`) pour comparer les deux écosystèmes ; le léger écart de performance entre les deux vient de la différence d'algorithme d'optimisation et de sélection du paramètre de régularisation (`lambda.1se` en validation croisée pour `glmnet`, vs. une grille de `C` pour `LogisticRegressionCV`), pas d'un bug. C'est la version Python qui est déployée dans le dashboard Streamlit.
 
@@ -50,10 +50,10 @@ Variables retenues par le LASSO (par poids décroissant) : `total_reimbursed`, `
 
 ## Rigueur méthodologique : erreurs identifiées et corrigées
 
-Un projet de data science n'est pas linéaire — voici les erreurs rencontrées en cours de route et comment elles ont été corrigées, par souci de transparence :
+Un projet de data science n'est pas linéaire, voici les erreurs rencontrées en cours de route et comment elles ont été corrigées, par souci de transparence :
 
 1. **Fuite de données sur le seuil de décision.** La toute première version calibrait et évaluait le seuil sur l'intégralité du dataset, sans split train/test. → Corrigé par l'introduction d'un split stratifié strict et d'un seuil calibré uniquement sur des prédictions OOF du train.
-2. **Seuil optimisé directement sur le test (exploration initiale).** Accepté comme simplification à ce stade exploratoire, mais identifié comme une fuite de données plus subtile — corrigé dans le pipeline final.
+2. **Seuil optimisé directement sur le test (exploration initiale).** Accepté comme simplification à ce stade exploratoire, mais identifié comme une fuite de données plus subtile, corrigé dans le pipeline final.
 3. **Biais de construction d'une variable métier** (`cost_per_hospit`) : la première formule mélangeait un montant ambulatoire au numérateur avec un nombre d'hospitalisations au dénominateur, rendant le ratio non interprétable. Identifié et reformulé.
 4. **Non-reproductibilité stricte malgré un `set.seed()` fixé** : une mise à jour de package a changé les résultats entre deux exécutions. Leçon retenue : figer les versions des packages (`renv::snapshot()` en R, `requirements.txt` versionné en Python) plutôt que de se reposer uniquement sur la seed.
 5. **`vif()` sur le modèle complet plantait** (`there are aliased coefficients in the model`) : le GLM à 9 variables contient plusieurs quasi-identités exactes (voir ci-dessus), donc certains coefficients ne sont pas identifiables tant qu'on ne les a pas retirés. Corrigé en diagnostiquant d'abord avec `alias()`, puis en calculant le VIF uniquement sur le modèle réduit.
@@ -67,7 +67,7 @@ L'application Streamlit permet de simuler le profil d'un prestataire (nombre de 
 
 ## Données
 
-Dataset source : [Healthcare Provider Fraud Detection](https://www.kaggle.com/datasets/rohitrox/healthcare-provider-fraud-detection-analysis) (Kaggle). Les fichiers de données ne sont pas inclus dans ce repo — à télécharger séparément sur Kaggle pour ré-exécuter les scripts `analysis/`.
+Dataset source : [Healthcare Provider Fraud Detection](https://www.kaggle.com/datasets/rohitrox/healthcare-provider-fraud-detection-analysis) (Kaggle). Les fichiers de données ne sont pas inclus dans ce repo, à télécharger séparément sur Kaggle pour ré-exécuter les scripts `analysis/`.
 
 ## Structure du repo
 
@@ -94,4 +94,4 @@ data_projet/
 
 ---
 
-*Projet réalisé par Lucas Manns dans le cadre d'une préparation à des postes de data scientist en assurance santé / mutuelle.* d'une préparation à des postes de data scientist en assurance santé / mutuelle.*
+*Projet réalisé par Lucas M. dans le cadre d'une préparation à des postes de data scientist en assurance santé / mutuelle.* d'une préparation à des postes de data scientist en assurance santé / mutuelle.*
