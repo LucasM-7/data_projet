@@ -23,7 +23,7 @@ library(car)
 library(tidyverse)
 
 set.seed(2026)
-
+df <- read.csv("insurance_clean.csv")
 
 # ============================================================
 # PARTIE A - Exploration initiale (2 variables)
@@ -113,7 +113,7 @@ table(Prediction = test_pred, Realite = test_df$PotentialFraud)
 # Précision 68.3%, recall 27.7% - seuil 0.5 inadapté à une classe minoritaire (~9%)
 
 # Seuil optimal via indice de Youden (recherché ici sur le test, à titre
-# exploratoire - corrigé en Partie B avec une approche Out-Of-Fold)
+# exploratoire ; corrigé en Partie B avec une approche Out-Of-Fold)
 roc_score <- roc(test_df$PotentialFraud, test_prob)
 auc(roc_score)  # 0.9119
 plot(roc_score, main = "Courbe ROC - Baseline GLM")
@@ -180,18 +180,30 @@ corrplot(cor_matrix, method = "color", type = "upper",
          mar = c(0, 0, 1, 0))
 
 glm_full <- glm(PotentialFraud ~ . - Provider, data = train_prep, family = binomial)
-vif(glm_full)
-glm_full_reduced <- update(glm_full, . ~ . - nb_outpatient - total_deductible - max_reimbursed_inp)
-vif(glm_full_reduced)
+
+# vif(glm_full) échouerait ici avec "there are aliased coefficients in the
+# model" : le modèle complet contient plusieurs identités quasi parfaites
+# entre variables (voir alias() ci-dessous), donc certains coefficients ne
+# sont pas identifiables. On diagnostique avec alias() AVANT de calculer un
+# VIF, plutôt que de laisser l'erreur interrompre le script.
 alias(glm_full)
 
-# Deux redondances identifiées parmi les 9 variables construites en SQL :
+# Trois redondances identifiées parmi les 9 variables construites en SQL :
 # - identité algébrique exacte : total_claims = nb_hospit + nb_outpatient
-# - redondance structurelle : avg_reimbursed_out et max_reimbursed_out
-#   coïncident pour tout prestataire n'ayant qu'un seul claim ambulatoire
-#   (corrélation observée 0.95, VIF > 29)
-# Ces deux redondances expliquent pourquoi le LASSO ne retient que 3
-# variables sur 9.
+# - total_deductible quasi identique à nb_hospit (corrélation ~1.00) :
+#   la franchise Medicare par séjour hospitalier est un montant quasi fixe
+# - avg_reimbursed_inp quasi identique à max_reimbursed_inp (corrélation
+#   ~1.00) : la plupart des prestataires n'ont qu'un seul séjour hospitalier,
+#   donc moyenne = maximum mathématiquement
+# On retire ces trois variables avant de calculer le VIF sur le reste.
+glm_full_reduced <- update(glm_full, . ~ . - nb_outpatient - total_deductible - max_reimbursed_inp)
+vif(glm_full_reduced)
+
+# Il reste une redondance forte mais non parfaite : avg_reimbursed_out et
+# max_reimbursed_out coïncident pour tout prestataire n'ayant qu'un seul
+# claim ambulatoire (corrélation 0.95, VIF > 29 dans le modèle réduit).
+# Ces quatre redondances au total expliquent pourquoi le LASSO ne retient
+# finalement que 3 variables sur 9.
 
 # GLM baseline enrichi (3 variables, sur Train uniquement)
 glm_baseline <- glm(PotentialFraud ~ total_claims + nb_hospit + avg_reimbursed_out,
@@ -247,7 +259,7 @@ auc_pr_enet <- pr.curve(scores.class0 = test_probs_enet[y_test == 1],
 brier_score_enet <- mean((test_probs_enet - y_test)^2)
 
 # Calibration du seuil LASSO sur des prédictions Out-Of-Fold (OOF) du train
-# uniquement - jamais sur le test, qui reste sanctuarisé pour l'évaluation
+# uniquement : jamais sur le test, qui reste sanctuarisé pour l'évaluation
 # finale. C'est la correction méthodologique clé de ce pipeline (voir notes
 # de fin de script).
 oof_probs <- 1 / (1 + exp(-oof_preds))
@@ -266,7 +278,7 @@ cm <- confusionMatrix(factor(test_preds_binary), factor(y_test), positive = "1")
 roc_test <- roc(y_test, test_probs)
 auc_roc <- auc(roc_test)
 
-# PR-AUC plus pertinent que ROC-AUC ici (classe positive minoritaire, ~9%)
+# PR-AUC plus pertinent que ROC-AUC ici (classe positive minoritaire, ~ 9%)
 pr_obj <- pr.curve(scores.class0 = test_probs[y_test == 1],
                    scores.class1 = test_probs[y_test == 0],
                    curve = TRUE)
@@ -341,7 +353,7 @@ df <- df %>%
 summary(df$cost_per_hospit)
 
 # Sur l'ancienne version du ratio, les fraudeurs semblaient avoir un coût
-# par hospitalisation plus bas (contre-intuitif) - probablement un effet
+# par hospitalisation plus bas (contre-intuitif), probablement un effet
 # de structure lié à une forte activité d'hospitalisation. À revalider
 # avec la version corrigée avant toute utilisation dans un modèle.
 
@@ -364,5 +376,5 @@ summary(df$cost_per_hospit)
 # 4. Résultats LASSO non stables entre deux exécutions malgré set.seed()
 #    fixé : cv.glmnet consomme le générateur aléatoire pour ses folds, et
 #    une mise à jour de package a changé ce comportement interne. Un seed
-#    seul ne garantit pas la reproductibilité stricte dans le temps, d'où
+#    seul ne garantit pas la reproductibilité stricte dans le temps : d'où
 #    le choix de figer les versions via renv (voir renv.lock).
