@@ -88,7 +88,7 @@ data_projet/
 
 ## Pistes d'amélioration
 
-- Valider `cost_per_hospit` (version corrigée) dans une prochaine itération du modèle.
+- Exploiter les dates de réclamation (ClaimStartDxDate/ClaimEndDxDate), non utilisées dans la version actuelle, pour tester la robustesse du modèle dans le temps (split temporel plutôt qu'aléatoire, détection de dérive).
 - Ajouter un renv/requirements figé pour garantir la reproductibilité stricte entre exécutions.
 - Étendre le dashboard avec des profils pré-remplis issus du dataset réel, pour faciliter la démonstration.
 
