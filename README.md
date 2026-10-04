@@ -54,7 +54,7 @@ Côté R, le LASSO (`glmnet`) ne retient que 3 variables sur 9 (coefficients str
 
 Le split aléatoire stratifié ci-dessus évalue le modèle dans des conditions idéales, mais ne répond pas à une question pourtant centrale avant tout déploiement : le modèle tient-il quand on l'entraîne sur le passé et qu'on le teste sur des prestataires plus récents, jamais vus — le scénario réel de mise en production ?
 
-Pour y répondre, une date de dernière activité par prestataire a été extraite en SQL (`MAX(ClaimStartDt)` sur les tables Inpatient et Outpatient, combiné par un `LEFT JOIN` + `CASE WHEN` pour gérer les prestataires n'ayant qu'un seul type d'activité). Le dataset couvre environ 13 mois (2008-11-27 à 2009-12-31). Une coupure au 80e percentile de cette date (2009-12-30) définit un split **temporel** : train = prestataires actifs avant la coupure, test = prestataires actifs après.
+Pour y répondre, une date de dernière activité par prestataire a été extraite en SQL : la plus récente de ses dates de claim, hospitalier et/ou ambulatoire (MAX(ClaimStartDt) sur les tables Inpatient et Outpatient). La plupart des prestataires ont les deux types d'activité, mais une minorité n'en a qu'un seul (par exemple uniquement de l'ambulatoire), un LEFT JOIN + CASE WHEN gère ce cas particulier pour que l'absence de l'un des deux types (NULL) ne fausse pas le calcul de la date la plus récente. Le dataset couvre environ 13 mois (2008-11-27 à 2009-12-31). Une coupure au 80e percentile de cette date (2009-12-30) définit un split temporel : train = prestataires actifs avant la coupure, test = prestataires actifs après.
 
 | Split | ROC-AUC | PR-AUC | Taux de fraude Train / Test |
 |---|---|---|---|
