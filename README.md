@@ -1,6 +1,6 @@
 # Détection de fraude santé (Healthcare Provider Fraud Detection)
 
-**Pipeline complet SQL → R → Python, du nettoyage de données brutes jusqu'à un modèle déployé en production.**
+**Pipeline complet SQL → R → Python, du nettoyage de données brutes jusqu'à un modèle déployé via un dashboard interactif.**
 
 Projet construit sur le dataset *Healthcare Provider Fraud Detection* (claims santé US), avec l'objectif de prédire, à partir du comportement agrégé d'un prestataire de soins, sa probabilité d'être frauduleux.
 
