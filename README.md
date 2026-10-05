@@ -42,7 +42,7 @@ Un assureur santé ne peut pas auditer tous ses prestataires, auditer coûte che
 | Elastic Net (R, glmnet) | 0.928 | 0.677 | `total_claims`, `nb_hospit`, `nb_outpatient`, `total_reimbursed`, `max_reimbursed_inp`, `total_deductible` |
 | XGBoost (Python, comparaison) | 0.920 | 0.693 | 9 (top 3 en importance SHAP : `total_reimbursed`, `total_deductible`, `max_reimbursed_out`) |
 
-**Modèle final retenu : LASSO.** Performance équivalente (voire légèrement supérieure) à XGBoost, pour une explicabilité native et exacte via les coefficients, un critère important en assurance santé, où la décision d'auditer un prestataire doit pouvoir se justifier. Une courbe d'apprentissage sur XGBoost (PR-AUC en validation croisée selon la taille du train) montre une nette progression jusqu'à ~2770 lignes (0.65 → 0.68), puis un plafonnement au-delà, suggérant que le dataset a d'abord limité XGBoost sur les petites tailles, mais qu'avec le volume actuel on approche déjà du plafond atteignable avec ces 9 variables. Autrement dit, le potentiel non-linéaire supplémentaire de XGBoost semble limité ici, que ce soit par la nature essentiellement linéaire de la relation ou par la taille encore modeste de l'échantillon (~400 fraudeurs) — les deux hypothèses ne s'excluent pas. Dans tous les cas, cela justifie le choix du LASSO, plus simple et plus interprétable, pour la version déployée.
+**Modèle final retenu : LASSO.** Performance équivalente (voire légèrement supérieure) à XGBoost, pour une explicabilité native et exacte via les coefficients, un critère important en assurance santé, où la décision d'auditer un prestataire doit pouvoir se justifier. Une courbe d'apprentissage sur XGBoost (PR-AUC en validation croisée selon la taille du train) montre une nette progression jusqu'à ~2770 lignes (0.65 → 0.68), puis un plafonnement au-delà, suggérant que le dataset a d'abord limité XGBoost sur les petites tailles, mais qu'avec le volume actuel on approche déjà du plafond atteignable avec ces 9 variables. Autrement dit, le potentiel non-linéaire supplémentaire de XGBoost semble limité ici, que ce soit par la nature essentiellement linéaire de la relation ou par la taille encore modeste de l'échantillon (~400 fraudeurs), les deux hypothèses ne s'excluent pas. Dans tous les cas, cela justifie le choix du LASSO, plus simple et plus interprétable, pour la version déployée.
 
 Le LASSO a été implémenté deux fois (R avec `glmnet`, Python avec `scikit-learn`) pour comparer les deux écosystèmes ; le léger écart de performance entre les deux vient de la différence d'algorithme d'optimisation et de sélection du paramètre de régularisation (`lambda.1se` en validation croisée pour `glmnet`, vs. une grille de `C` pour `LogisticRegressionCV`), pas d'un bug. C'est la version Python qui est déployée dans le dashboard Streamlit.
 
@@ -52,7 +52,7 @@ Côté R, le LASSO (`glmnet`) ne retient que 3 variables sur 9 (coefficients str
 
 ## Partie II — Validation temporelle (out-of-time)
 
-Le split aléatoire stratifié ci-dessus évalue le modèle dans des conditions idéales, mais ne répond pas à une question pourtant centrale avant tout déploiement : le modèle tient-il quand on l'entraîne sur le passé et qu'on le teste sur des prestataires plus récents, jamais vus — le scénario réel de mise en production ?
+Le split aléatoire stratifié ci-dessus évalue le modèle dans des conditions idéales, mais ne répond pas à une question pourtant centrale avant tout déploiement : le modèle tient-il quand on l'entraîne sur le passé et qu'on le teste sur des prestataires plus récents, jamais vus, le scénario réel de mise en production ?
 
 Pour y répondre, une date de dernière activité par prestataire a été extraite en SQL : la plus récente de ses dates de claim, hospitalier et/ou ambulatoire (MAX(ClaimStartDt) sur les tables Inpatient et Outpatient). La plupart des prestataires ont les deux types d'activité, mais une minorité n'en a qu'un seul (par exemple uniquement de l'ambulatoire), un LEFT JOIN + CASE WHEN gère ce cas particulier pour que l'absence de l'un des deux types (NULL) ne fausse pas le calcul de la date la plus récente. Le dataset couvre environ 13 mois (2008-11-27 à 2009-12-31). Une coupure au 80e percentile de cette date (2009-12-30) définit un split temporel : train = prestataires actifs avant la coupure, test = prestataires actifs après.
 
@@ -71,10 +71,10 @@ Le changement de taux de fraude entre les deux périodes (7.21% → 23.49%) est 
 
 ## Rigueur méthodologique : erreurs identifiées et corrigées
 
-Un projet de data science n'est pas linéaire — voici les erreurs rencontrées en cours de route et comment elles ont été corrigées, par souci de transparence :
+Un projet de data science n'est pas linéaire, voici les erreurs rencontrées en cours de route et comment elles ont été corrigées, par souci de transparence :
 
 1. **Fuite de données sur le seuil de décision.** La toute première version calibrait et évaluait le seuil sur l'intégralité du dataset, sans split train/test. → Corrigé par l'introduction d'un split stratifié strict et d'un seuil calibré uniquement sur des prédictions OOF du train.
-2. **Seuil optimisé directement sur le test (exploration initiale).** Accepté comme simplification à ce stade exploratoire, mais identifié comme une fuite de données plus subtile — corrigé dans le pipeline final.
+2. **Seuil optimisé directement sur le test (exploration initiale).** Accepté comme simplification à ce stade exploratoire, mais identifié comme une fuite de données plus subtile, corrigé dans le pipeline final.
 3. **Biais de construction d'une variable métier** (`cost_per_hospit`) : la première formule mélangeait un montant ambulatoire au numérateur avec un nombre d'hospitalisations au dénominateur, rendant le ratio non interprétable. Identifié et reformulé.
 4. **Non-reproductibilité stricte malgré un `set.seed()` fixé** : une mise à jour de package a changé les résultats entre deux exécutions. Leçon retenue : figer les versions des packages (`renv::snapshot()` en R, `requirements.txt` versionné en Python) plutôt que de se reposer uniquement sur la seed.
 5. **`vif()` sur le modèle complet plantait** (`there are aliased coefficients in the model`) : le GLM à 9 variables contient plusieurs quasi-identités exactes (voir ci-dessus), donc certains coefficients ne sont pas identifiables tant qu'on ne les a pas retirés. Corrigé en diagnostiquant d'abord avec `alias()`, puis en calculant le VIF uniquement sur le modèle réduit.
@@ -88,7 +88,7 @@ L'application Streamlit permet de simuler le profil d'un prestataire (nombre de 
 
 ## Données
 
-Dataset source : [Healthcare Provider Fraud Detection](https://www.kaggle.com/datasets/rohitrox/healthcare-provider-fraud-detection-analysis) (Kaggle). Les fichiers de données ne sont pas inclus dans ce repo — à télécharger séparément sur Kaggle pour ré-exécuter les scripts `analysis/`.
+Dataset source : [Healthcare Provider Fraud Detection](https://www.kaggle.com/datasets/rohitrox/healthcare-provider-fraud-detection-analysis) (Kaggle). Les fichiers de données ne sont pas inclus dans ce repo, à télécharger séparément sur Kaggle pour ré-exécuter les scripts `analysis/`.
 
 ## Structure du repo
 
@@ -113,7 +113,7 @@ data_projet/
 - Ajouter un renv/requirements figé pour garantir la reproductibilité stricte entre exécutions.
 - Étendre le dashboard avec des profils pré-remplis issus du dataset réel, pour faciliter la démonstration.
 - **Simulation de nouvelles données pour tester le déploiement en continu** : générer des claims synthétiques futurs pour valider que le pipeline (SQL → preprocessing → modèle) tient sur un flux de données jamais vu, au-delà du test out-of-time déjà réalisé en Partie II. Mis de côté pour l'instant : la génération de données synthétiques réalistes est un sujet à part entière, qui dépasserait le cadre de ce projet.
-- **Limite connue de la validation temporelle (Partie II)** : les prestataires sont assignés au train/test selon leur date d'activité la plus récente, mais leurs 9 variables restent calculées sur l'intégralité de leur historique de claims. Un prestataire actif des deux côtés de la date de coupure voit donc ses variables intégrer un peu d'information postérieure à la coupure — une fuite partielle, assumée ici par simplicité. Une version plus rigoureuse recalculerait les variables en n'utilisant que les claims antérieurs à la coupure.
+- **Limite connue de la validation temporelle (Partie II)** : les prestataires sont assignés au train/test selon leur date d'activité la plus récente, mais leurs 9 variables restent calculées sur l'intégralité de leur historique de claims. Un prestataire actif des deux côtés de la date de coupure voit donc ses variables intégrer un peu d'information postérieure à la coupure, une fuite partielle, assumée ici par simplicité. Une version plus rigoureuse recalculerait les variables en n'utilisant que les claims antérieurs à la coupure.
 
 ---
 
